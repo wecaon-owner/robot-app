@@ -233,9 +233,16 @@ function switchTab(t){tab=t;draw();}
 
 /* ───────── 초기화 / 설정 화면 ───────── */
 function resetKeys(){localStorage.removeItem(LS_GH);localStorage.removeItem(LS_AI);location.reload();}
+function exportCode(){
+  const code="CRA1|"+localStorage.getItem(LS_GH)+"|"+localStorage.getItem(LS_AI);
+  const done=()=>alert("설정 코드가 복사됐습니다.\n새 기기의 ① 칸에 그대로 붙여넣고 '연결하기'를 누르면 한 번에 연결됩니다.\n(열쇠가 담긴 코드이니 메신저로 보냈다면 입력 후 꼭 삭제하세요)");
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(code).then(done).catch(()=>prompt("아래 코드를 길게 눌러 복사하세요:",code));}
+  else prompt("아래 코드를 길게 눌러 복사하세요:",code);
+}
 function saveSetup(){
-  const g=$("ghk").value.trim(),a=$("aik").value.trim();
-  if(!g||!a){alert("두 열쇠를 모두 입력해 주세요.");return;}
+  let g=$("ghk").value.trim(),a=$("aik").value.trim();
+  if(g.startsWith("CRA1|")){const p=g.split("|");if(p.length>=3){g=p[1].trim();a=p[2].trim();}}
+  if(!g||!a){alert("두 열쇠를 모두 입력하거나, 다른 기기에서 복사한 설정 코드를 ① 칸에 붙여넣어 주세요.");return;}
   localStorage.setItem(LS_GH,g);localStorage.setItem(LS_AI,a);location.reload();
 }
 function boot(){
@@ -244,7 +251,7 @@ function boot(){
     app.innerHTML=`<div class="setup"><div class="setupbox">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">${sealHtml("S",40)}<div><div class="serif" style="font-size:19px;font-weight:800">중국 로봇 산업 분석실</div><div style="font-size:12.5px;color:var(--sub)">최초 1회 연결 설정</div></div></div>
       <p style="font-size:13.5px;color:var(--sub);line-height:1.7;margin:0 0 14px">두 개의 열쇠를 입력하면 시작됩니다. 열쇠는 <strong style="color:var(--ink)">이 기기의 브라우저에만</strong> 저장되며 외부로 전송되지 않습니다.</p>
-      <div style="font-size:13px;font-weight:700;margin-bottom:4px">① GitHub 읽기 전용 토큰</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">① GitHub 읽기 전용 토큰 <span style="font-weight:400;color:var(--sub)">(또는 다른 기기에서 복사한 설정 코드)</span></div>
       <input id="ghk" type="password" placeholder="github_pat_…">
       <div style="font-size:13px;font-weight:700;margin-bottom:4px">② Claude API 키</div>
       <input id="aik" type="password" placeholder="sk-ant-…">
@@ -257,6 +264,7 @@ function boot(){
   <header>${sealHtml("S",34)}
     <div style="flex:1;min-width:180px"><div class="serif" style="font-size:17px;font-weight:800">중국 로봇 산업 분석실</div><div id="status" style="font-size:12px;color:var(--sub)">준비 중…</div></div>
     <button class="btn" onclick="loadAll()">새로고침</button>
+    <button class="btn" onclick="exportCode()" title="다른 기기 연결용 코드 복사">설정 코드</button>
     <button class="btn" onclick="resetKeys()" title="열쇠 삭제 후 재설정">연결 해제</button>
   </header>
   <div id="err" class="err" style="display:none"></div>
