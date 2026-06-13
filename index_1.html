@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>중국 로봇 산업 분석실</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@600;800&family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F3F5F4;--panel:#fff;--ink:#1B2724;--sub:#5C6B66;--line:#E2E7E5;--seal:#B23A2E;--pine:#2E5D4B;--amber:#B07A2A;--gray:#8A948F;--steel:#3D5A73;}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Noto Sans KR',sans-serif;font-size:14px}
+.serif{font-family:'Noto Serif KR',serif}.mono{font-family:'IBM Plex Mono',monospace}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.seal{display:flex;align-items:center;justify-content:center;border-radius:7px;transform:rotate(-3deg);font-family:'Noto Serif KR',serif;font-weight:800;flex-shrink:0}
+.btn{padding:9px 16px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;border:1px solid var(--line);background:#fff;color:var(--ink);font-family:inherit}
+.btn.primary{background:var(--ink);color:#fff;border:none}
+.btn:disabled{opacity:.55;cursor:default}
+.tabs{display:flex;gap:4px;padding:12px 18px 0}
+.tab{padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer;border:none;border-radius:10px 10px 0 0;background:transparent;color:var(--sub);border-bottom:3px solid transparent;font-family:inherit}
+.tab.on{background:var(--panel);color:var(--ink);border-bottom-color:var(--seal)}
+.panel{background:var(--panel);margin:0 18px 18px;border:1px solid var(--line);border-radius:0 12px 12px 12px;padding:18px;min-height:420px}
+.err{margin:14px 18px 0;background:#FBEFED;border:1px solid #E8C8C3;color:var(--seal);border-radius:10px;padding:12px 14px;font-size:13.5px}
+.card{border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px}
+.bar{height:5px;background:#EDF0EF;border-radius:3px;overflow:hidden}
+.bar>div{height:100%}
+table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
+th{padding:7px 9px;text-align:left;color:var(--sub);font-weight:700;white-space:nowrap;background:#F6F8F7}
+td{padding:7px 9px;vertical-align:top;border-bottom:1px solid var(--line)}
+h1m,h2m{display:block;font-family:'Noto Serif KR',serif;font-weight:800}
+.md p{margin:6px 0;line-height:1.75}
+.md hr{border:none;border-top:1px solid var(--line);margin:14px 0}
+.md blockquote{border-left:3px solid var(--pine);padding:4px 10px;color:var(--sub);font-size:13px;margin:6px 0}
+.md code{background:#EEF1F0;padding:0 4px;border-radius:3px;font-family:'IBM Plex Mono',monospace;font-size:.9em}
+.chatbox{display:flex;flex-direction:column;height:62vh;min-height:380px}
+.msgs{flex:1;overflow-y:auto;padding-right:4px}
+.msg{display:flex;margin:8px 0}
+.msg.user{justify-content:flex-end}
+.bub{max-width:85%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.7}
+.msg.user .bub{background:var(--ink);color:#fff}
+.msg.ai .bub{background:#F6F8F7;border:1px solid var(--line)}
+.inputrow{display:flex;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.inputrow input{flex:1;padding:11px 14px;border-radius:10px;border:1px solid var(--line);font-size:14px;outline:none;font-family:inherit}
+.mic{width:44px;height:44px;border-radius:22px;border:1px solid var(--line);background:#fff;font-size:18px;cursor:pointer;flex-shrink:0}
+.mic.on{background:var(--seal);color:#fff;border-color:var(--seal)}
+.setup{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.setupbox{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:34px 30px;max-width:480px;width:100%}
+.setupbox input{width:100%;padding:11px 13px;border-radius:8px;border:1px solid var(--line);font-size:13px;margin-bottom:12px;outline:none;font-family:'IBM Plex Mono',monospace}
+.hint{font-size:12px;color:var(--sub);margin-top:14px;line-height:1.6}
+.sug{display:block;width:100%;text-align:left;border:1px solid var(--line);background:#FAFBFB;color:var(--ink);border-radius:8px;padding:8px 12px;margin:6px 0;cursor:pointer;font-size:13.5px;font-family:inherit}
+footer{text-align:center;font-size:11.5px;color:var(--sub);padding-bottom:16px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ───────── 설정 ───────── */
+const OWNER="wecaon-owner", REPO="china-robot-agent";
+const LS_GH="cra_gh_token", LS_AI="cra_ai_key";
+let companies=[], report=null, reportCount=0, designDoc="", msgs=[], tab="board", listening=false, thinking=false, fxRate=null;
+
+/* ── 환율 (위안→원) ── */
+async function loadFx(){
+  try{
+    const r=await fetch("https://open.er-api.com/v6/latest/CNY");
+    const d=await r.json();
+    if(d&&d.rates&&d.rates.KRW){fxRate=Math.round(d.rates.KRW*10)/10;}
+  }catch(e){console.warn("환율 조회 실패",e);}
+}
+function fmtKrw(krw){
+  if(krw>=1e12)return (Math.round(krw/1e11)/10).toLocaleString("ko-KR")+"조 원";
+  if(krw>=1e8)return Math.round(krw/1e8).toLocaleString("ko-KR")+"억 원";
+  if(krw>=1e4)return Math.round(krw/1e4).toLocaleString("ko-KR")+"만 원";
+  return Math.round(krw).toLocaleString("ko-KR")+"원";
+}
+function annotateYuan(text){
+  if(!fxRate)return text;
+  // 이미 (약 ...원) 병기가 붙은 금액은 건너뛰고, "N억 위안"/"N만 위안" 패턴에 원화 환산을 붙인다
+  return text
+    .replace(/(\d[\d,]*(?:\.\d+)?)\s*억\s*위안(?!\s*\(약)/g,(m,n)=>{
+      const v=parseFloat(n.replace(/,/g,""))*1e8*fxRate;
+      return `${n}억 위안(약 ${fmtKrw(v)})`;})
+    .replace(/(\d[\d,]*(?:\.\d+)?)\s*만\s*위안(?!\s*\(약)/g,(m,n)=>{
+      const v=parseFloat(n.replace(/,/g,""))*1e4*fxRate;
+      return `${n}만 위안(약 ${fmtKrw(v)})`;});
+}
+
+const $=(id)=>document.getElementById(id);
+const esc=(s)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+const gcolor=(g)=>g==="S"?"var(--seal)":g==="A"?"var(--pine)":g==="B"?"var(--amber)":"var(--gray)";
+const sealHtml=(g,sz)=>{const f=g==="S";return `<span class="seal" style="width:${sz}px;height:${sz}px;font-size:${sz*0.5}px;border:2.5px solid ${gcolor(g)};color:${f?"#fff":gcolor(g)};background:${f?gcolor(g):"transparent"}">${g}</span>`;};
+
+/* ───────── GitHub ───────── */
+async function ghRaw(path){
+  const r=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${path}`,{headers:{Authorization:`Bearer ${localStorage.getItem(LS_GH)}`,Accept:"application/vnd.github.raw"}});
+  if(!r.ok)throw new Error(r.status+":"+path);
+  return r.text();
+}
+async function ghList(dir){
+  const r=await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/contents/${dir}`,{headers:{Authorization:`Bearer ${localStorage.getItem(LS_GH)}`,Accept:"application/vnd.github+json"}});
+  if(!r.ok)throw new Error(r.status+":"+dir);
+  return r.json();
+}
+
+/* ───────── 점수표 파싱 ───────── */
+function parseScores(md){
+  const rows=[];let sec="";
+  for(const line of md.split("\n")){
+    const h=line.match(/^##\s+(.+)/); if(h){sec=h[1].trim();continue;}
+    if(!line.trim().startsWith("|"))continue;
+    const c=line.split("|").map(s=>s.trim()).slice(1,-1);
+    if(c.length<9||c[0].includes("기업명")||c[0].startsWith("-")||sec.includes("이력"))continue;
+    const total=(c[7]||"").replace(/\*/g,"").trim();
+    rows.push({name:c[0],listing:c[1],dims:[c[2],c[3],c[4],c[5],c[6]],total:total==="-"?null:total,grade:(c[8]||"-").trim(),note:c[10]||"",sec});
+  }
+  return rows;
+}
+
+/* ───────── 간이 마크다운 ───────── */
+function inlineMd(t){return esc(t).replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>").replace(/`(.+?)`/g,"<code>$1</code>");}
+function renderMd(md){
+  const lines=md.split("\n");let out="",i=0;
+  while(i<lines.length){
+    const ln=lines[i];
+    if(ln.trim().startsWith("|")){
+      const tbl=[];while(i<lines.length&&lines[i].trim().startsWith("|")){tbl.push(lines[i]);i++;}
+      const rows=tbl.map(r=>r.split("|").map(s=>s.trim()).slice(1,-1)).filter(r=>!/^-+$/.test(r[0]||"-")&&!r.every(c=>/^-*$/.test(c)));
+      out+="<div style='overflow-x:auto'><table>";
+      rows.forEach((r,ri)=>{out+="<tr>"+r.map(c=>ri===0?`<th>${inlineMd(c)}</th>`:`<td>${inlineMd(c)}</td>`).join("")+"</tr>";});
+      out+="</table></div>";continue;
+    }
+    if(/^#{1,4}\s/.test(ln)){const l=ln.match(/^#+/)[0].length;const sz={1:22,2:18,3:15.5,4:14}[l]||14;
+      out+=`<div class="serif" style="font-size:${sz}px;font-weight:800;margin:${l<=2?"20px 0 8px":"14px 0 6px"};${l===2?"border-bottom:2px solid var(--ink);padding-bottom:5px":""}">${inlineMd(ln.replace(/^#+\s*/,""))}</div>`;}
+    else if(/^---+$/.test(ln.trim()))out+="<hr>";
+    else if(ln.trim().startsWith(">"))out+=`<blockquote>${inlineMd(ln.replace(/^\s*>\s?/,""))}</blockquote>`;
+    else if(/^\s*[-*]\s+/.test(ln))out+=`<div style="display:flex;gap:8px;margin:3px 0;line-height:1.65"><span style="color:var(--pine)">•</span><span style="flex:1">${inlineMd(ln.replace(/^\s*[-*]\s+/,""))}</span></div>`;
+    else if(/^\s*\d+\.\s+/.test(ln)){const n=ln.match(/^\s*(\d+)\./)[1];out+=`<div style="display:flex;gap:8px;margin:3px 0;line-height:1.65"><span class="mono" style="color:var(--pine)">${n}.</span><span style="flex:1">${inlineMd(ln.replace(/^\s*\d+\.\s+/,""))}</span></div>`;}
+    else if(ln.trim())out+=`<p>${inlineMd(ln)}</p>`;
+    i++;
+  }
+  return `<div class="md">${out}</div>`;
+}
+
+/* ───────── 데이터 로딩 ───────── */
+async function loadAll(){
+  setStatus("저장소에서 최신 데이터를 불러오는 중…");$("err").style.display="none";
+  try{
+    const [scoresMd,design,list]=await Promise.all([ghRaw("02_companies/company_scores.md"),ghRaw("00_design/design_doc.md"),ghList("01_weekly_reports")]);
+    const reps=list.filter(f=>/_weekly_report\.md$/.test(f.name)).sort((a,b)=>a.name<b.name?1:-1);
+    report=null;reportCount=reps.length;
+    if(reps.length){report={name:reps[0].name,text:await ghRaw("01_weekly_reports/"+reps[0].name)};}
+    companies=parseScores(scoresMd);designDoc=design;
+    setStatus(`동기화 ${new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})} · 보고서 ${reportCount}건 · 기업 ${companies.length}곳`+(fxRate?` · 1위안 ≈ ${fxRate}원`:""));
+    draw();
+  }catch(e){
+    const code=String(e.message).split(":")[0];
+    showErr(code==="401"?"토큰이 유효하지 않습니다. 새 GitHub 토큰을 발급해 '연결 해제' 후 다시 등록해 주세요."
+      :code==="404"?"저장소나 파일을 찾을 수 없습니다. 토큰의 저장소 권한(china-robot-agent, Contents: Read)을 확인해 주세요."
+      :"데이터를 불러오지 못했습니다. 인터넷 연결을 확인하고 '새로고침'을 눌러주세요.");
+    setStatus("연결 실패");
+  }
+}
+function setStatus(t){const el=$("status");if(el)el.textContent=t;}
+function showErr(t){const el=$("err");if(el){el.style.display="block";el.textContent=t;}}
+
+/* ───────── AI 질문 ───────── */
+async function ask(q){
+  const input=$("q");const question=(q??input.value).trim();
+  if(!question||thinking)return;
+  input.value="";msgs.push({role:"user",content:question});thinking=true;drawChat();
+  const sys=`너는 '중국 로봇 산업 분석 에이전트'다. 한국인 투자자의 질문에 아래 지식 베이스를 근거로 한국어로 답한다.
+규칙: 1) 근거가 없으면 솔직히 없다고 말한다. 2) 점수·등급은 점수표를 그대로 인용한다. 3) 투자 추천은 하지 않고 판단 재료만 정리한다. 4) 간결하게 답한다. 5) 위안화 금액을 언급할 때는 괄호로 원화 환산을 병기한다${fxRate?` (1위안 = ${fxRate}원 적용, '약'을 붙여 반올림)`:""}.
+[기업 점수표]
+${companies.map(c=>`${c.name}(${c.sec}) 총점:${c.total??"미평가"} 등급:${c.grade} 비고:${c.note}`).join("\n")}
+[최신 주간보고서: ${report?report.name:"없음"}]
+${(report?report.text:"").slice(0,14000)}
+[설계문서]
+${designDoc.slice(0,9000)}`;
+  try{
+    const r=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{
+      "Content-Type":"application/json","x-api-key":localStorage.getItem(LS_AI),
+      "anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},
+      body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:1500,system:sys,messages:msgs.map(m=>({role:m.role,content:m.content}))})});
+    const data=await r.json();
+    if(data.error)throw new Error(data.error.message||"api");
+    const text=(data.content||[]).filter(b=>b.type==="text").map(b=>b.text).join("\n")||"응답을 받지 못했습니다.";
+    msgs.push({role:"assistant",content:text});
+  }catch(e){
+    msgs.push({role:"assistant",content:"답변 생성에 실패했습니다: "+e.message+"\nAPI 키와 크레딧 잔액을 확인해 주세요."});
+  }
+  thinking=false;drawChat();
+}
+
+/* ───────── 음성 ───────── */
+let rec=null;
+function toggleVoice(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){alert("이 브라우저는 음성 입력을 지원하지 않습니다. 크롬에서 열어주세요.");return;}
+  if(listening){rec&&rec.stop();return;}
+  rec=new SR();rec.lang="ko-KR";rec.interimResults=false;
+  rec.onresult=e=>{const t=e.results[0][0].transcript;$("q").value=t;listening=false;drawMic();ask(t);};
+  rec.onend=()=>{listening=false;drawMic();};
+  rec.onerror=()=>{listening=false;drawMic();};
+  listening=true;drawMic();rec.start();
+}
+function drawMic(){const m=$("mic");if(m){m.className="mic"+(listening?" on":"");m.textContent=listening?"●":"🎤";const q=$("q");if(q)q.placeholder=listening?"듣고 있습니다… 말씀하세요":"질문을 입력하거나 마이크를 누르세요";}}
+
+/* ───────── 화면 ───────── */
+function gradeBoard(){
+  const ev=companies.filter(c=>c.total),pd=companies.filter(c=>!c.total);
+  if(!ev.length)return `<p style="color:var(--sub)">아직 평가된 기업이 없습니다.</p>`;
+  let h="";
+  for(const g of ["S","A","B","C"]){
+    const list=ev.filter(c=>c.grade===g).sort((a,b)=>b.total-a.total);
+    if(!list.length)continue;
+    const label=g==="S"?"최우선 모니터링":g==="A"?"유망":g==="B"?"관찰":"보류";
+    h+=`<div style="margin-bottom:22px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">${sealHtml(g,30)}<span class="serif" style="font-weight:800;font-size:15px">${label}<span class="mono" style="color:var(--sub);font-weight:500;font-size:12.5px;margin-left:8px">${list.length}곳</span></span></div><div class="grid">`;
+    for(const cp of list){
+      h+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><span style="font-weight:700;font-size:14.5px">${esc(cp.name)}</span><span class="mono" style="font-size:18px;font-weight:700;color:${gcolor(cp.grade)}">${cp.total}</span></div>
+      <div style="font-size:12px;color:var(--sub);margin:3px 0 8px">${esc(cp.sec)} · ${esc(cp.listing)}</div>
+      <div style="display:flex;gap:4px" title="밸류체인·기술·재무·정책·시장 (각 20점)">${cp.dims.map(d=>`<div style="flex:1"><div class="bar"><div style="width:${Math.min(100,(Number(d)/20)*100||0)}%;background:${gcolor(cp.grade)}"></div></div><div class="mono" style="font-size:10px;color:var(--sub);text-align:center;margin-top:2px">${d}</div></div>`).join("")}</div>
+      ${cp.note?`<div style="font-size:11.5px;color:var(--sub);margin-top:7px">${esc(cp.note)}</div>`:""}
+      <button onclick="goAsk('${esc(cp.name).replace(/'/g,"")}')" style="margin-top:9px;border:none;background:none;color:var(--steel);font-size:12.5px;font-weight:700;cursor:pointer;padding:0;font-family:inherit">이 기업 물어보기 →</button></div>`;
+    }
+    h+="</div></div>";
+  }
+  if(pd.length)h+=`<div style="border-top:1px dashed var(--line);padding-top:12px;font-size:12.5px;color:var(--sub)">미평가 ${pd.length}곳: ${pd.map(p=>esc(p.name)).join(", ")}</div>`;
+  return h;
+}
+function goAsk(name){tab="chat";draw();ask(name+"의 현재 평가와 핵심 체크포인트를 요약해줘");}
+function reportView(){
+  if(!report)return `<p style="color:var(--sub)">아직 주간보고서가 없습니다. 자동화가 실행되면 표시됩니다.</p>`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px"><span class="mono" style="font-size:12.5px;color:var(--sub)">${esc(report.name)} · 매주 월요일 자동 갱신${fxRate?` · 환산 1위안≈${fxRate}원`:""}</span><button class="btn" onclick="tab='chat';draw();ask('최신 주간보고서의 핵심만 5줄로 요약해줘')">AI 요약 듣기</button></div>${renderMd(annotateYuan(report.text))}`;
+}
+function chatView(){
+  return `<div class="chatbox"><div class="msgs" id="msgs"></div>
+  <div class="inputrow"><button id="mic" class="mic" onclick="toggleVoice()">🎤</button>
+  <input id="q" placeholder="질문을 입력하거나 마이크를 누르세요" onkeydown="if(event.key==='Enter')ask()">
+  <button class="btn primary" onclick="ask()">질문</button></div></div>`;
+}
+function drawChat(){
+  const box=$("msgs");if(!box)return;
+  let h="";
+  if(!msgs.length){
+    h=`<div style="color:var(--sub);font-size:13.5px;line-height:2">점수표·최신 보고서·설계문서를 근거로 답합니다. 예를 들어 —
+    ${["지금 S등급 기업은 어디야?","이번 주 보고서 핵심 요약해줘","퉈푸그룹 리스크가 뭐야?","유니트리와 유비텍 점수 차이 설명해줘"].map(q=>`<button class="sug" onclick="ask('${q}')">“${q}”</button>`).join("")}</div>`;
+  }
+  for(const m of msgs){h+=`<div class="msg ${m.role==="user"?"user":"ai"}"><div class="bub">${m.role==="assistant"?renderMd(annotateYuan(m.content)):esc(m.content)}</div></div>`;}
+  if(thinking)h+=`<div style="color:var(--sub);font-size:13px;margin:8px 0">분석 중…</div>`;
+  box.innerHTML=h;box.scrollTop=box.scrollHeight;
+}
+function draw(){
+  const root=$("main");if(!root)return;
+  document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("on",b.dataset.t===tab));
+  root.innerHTML=tab==="board"?gradeBoard():tab==="report"?reportView():chatView();
+  if(tab==="chat"){drawChat();drawMic();}
+}
+function switchTab(t){tab=t;draw();}
+
+/* ───────── 초기화 / 설정 화면 ───────── */
+function resetKeys(){localStorage.removeItem(LS_GH);localStorage.removeItem(LS_AI);location.reload();}
+function exportCode(){
+  const code="CRA1|"+localStorage.getItem(LS_GH)+"|"+localStorage.getItem(LS_AI);
+  const done=()=>alert("설정 코드가 복사됐습니다.\n새 기기의 ① 칸에 그대로 붙여넣고 '연결하기'를 누르면 한 번에 연결됩니다.\n(열쇠가 담긴 코드이니 메신저로 보냈다면 입력 후 꼭 삭제하세요)");
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(code).then(done).catch(()=>prompt("아래 코드를 길게 눌러 복사하세요:",code));}
+  else prompt("아래 코드를 길게 눌러 복사하세요:",code);
+}
+function saveSetup(){
+  let g=$("ghk").value.trim(),a=$("aik").value.trim();
+  if(g.startsWith("CRA1|")){const p=g.split("|");if(p.length>=3){g=p[1].trim();a=p[2].trim();}}
+  if(!g||!a){alert("두 열쇠를 모두 입력하거나, 다른 기기에서 복사한 설정 코드를 ① 칸에 붙여넣어 주세요.");return;}
+  localStorage.setItem(LS_GH,g);localStorage.setItem(LS_AI,a);location.reload();
+}
+function boot(){
+  const app=$("app");
+  if(!localStorage.getItem(LS_GH)||!localStorage.getItem(LS_AI)){
+    app.innerHTML=`<div class="setup"><div class="setupbox">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px">${sealHtml("S",40)}<div><div class="serif" style="font-size:19px;font-weight:800">중국 로봇 산업 분석실</div><div style="font-size:12.5px;color:var(--sub)">최초 1회 연결 설정</div></div></div>
+      <p style="font-size:13.5px;color:var(--sub);line-height:1.7;margin:0 0 14px">두 개의 열쇠를 입력하면 시작됩니다. 열쇠는 <strong style="color:var(--ink)">이 기기의 브라우저에만</strong> 저장되며 외부로 전송되지 않습니다.</p>
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">① GitHub 읽기 전용 토큰 <span style="font-weight:400;color:var(--sub)">(또는 다른 기기에서 복사한 설정 코드)</span></div>
+      <input id="ghk" type="password" placeholder="github_pat_…">
+      <div style="font-size:13px;font-weight:700;margin-bottom:4px">② Claude API 키</div>
+      <input id="aik" type="password" placeholder="sk-ant-…">
+      <button class="btn primary" onclick="saveSetup()" style="width:100%">연결하기</button>
+      <p class="hint">①은 github.com/settings/personal-access-tokens 에서 china-robot-agent 저장소 Contents: Read-only로 발급.<br>②는 console.anthropic.com → API Keys에서 발급. 공용 컴퓨터에서는 사용하지 마세요.</p>
+    </div></div>`;
+    return;
+  }
+  app.innerHTML=`
+  <header>${sealHtml("S",34)}
+    <div style="flex:1;min-width:180px"><div class="serif" style="font-size:17px;font-weight:800">중국 로봇 산업 분석실</div><div id="status" style="font-size:12px;color:var(--sub)">준비 중…</div></div>
+    <button class="btn" onclick="loadAll()">새로고침</button>
+    <button class="btn" onclick="exportCode()" title="다른 기기 연결용 코드 복사">설정 코드</button>
+    <button class="btn" onclick="resetKeys()" title="열쇠 삭제 후 재설정">연결 해제</button>
+  </header>
+  <div id="err" class="err" style="display:none"></div>
+  <div class="tabs">
+    <button class="tab on" data-t="board" onclick="switchTab('board')">등급 현황판</button>
+    <button class="tab" data-t="report" onclick="switchTab('report')">최신 보고서</button>
+    <button class="tab" data-t="chat" onclick="switchTab('chat')">질문하기</button>
+  </div>
+  <div class="panel" id="main"></div>
+  <footer>리서치 보조 도구입니다 · 투자 추천이 아니며 최종 판단은 본인에게 있습니다</footer>`;
+  draw();loadFx().then(()=>loadAll());
+}
+boot();
+</script>
+</body>
+</html>
