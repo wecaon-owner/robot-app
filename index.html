@@ -57,7 +57,33 @@ footer{text-align:center;font-size:11.5px;color:var(--sub);padding-bottom:16px}
 /* ───────── 설정 ───────── */
 const OWNER="wecaon-owner", REPO="china-robot-agent";
 const LS_GH="cra_gh_token", LS_AI="cra_ai_key";
-let companies=[], report=null, reportCount=0, designDoc="", msgs=[], tab="board", listening=false, thinking=false;
+let companies=[], report=null, reportCount=0, designDoc="", msgs=[], tab="board", listening=false, thinking=false, fxRate=null;
+
+/* ── 환율 (위안→원) ── */
+async function loadFx(){
+  try{
+    const r=await fetch("https://open.er-api.com/v6/latest/CNY");
+    const d=await r.json();
+    if(d&&d.rates&&d.rates.KRW){fxRate=Math.round(d.rates.KRW*10)/10;}
+  }catch(e){console.warn("환율 조회 실패",e);}
+}
+function fmtKrw(krw){
+  if(krw>=1e12)return (Math.round(krw/1e11)/10).toLocaleString("ko-KR")+"조 원";
+  if(krw>=1e8)return Math.round(krw/1e8).toLocaleString("ko-KR")+"억 원";
+  if(krw>=1e4)return Math.round(krw/1e4).toLocaleString("ko-KR")+"만 원";
+  return Math.round(krw).toLocaleString("ko-KR")+"원";
+}
+function annotateYuan(text){
+  if(!fxRate)return text;
+  // 이미 (약 ...원) 병기가 붙은 금액은 건너뛰고, "N억 위안"/"N만 위안" 패턴에 원화 환산을 붙인다
+  return text
+    .replace(/(\d[\d,]*(?:\.\d+)?)\s*억\s*위안(?!\s*\(약)/g,(m,n)=>{
+      const v=parseFloat(n.replace(/,/g,""))*1e8*fxRate;
+      return `${n}억 위안(약 ${fmtKrw(v)})`;})
+    .replace(/(\d[\d,]*(?:\.\d+)?)\s*만\s*위안(?!\s*\(약)/g,(m,n)=>{
+      const v=parseFloat(n.replace(/,/g,""))*1e4*fxRate;
+      return `${n}만 위안(약 ${fmtKrw(v)})`;});
+}
 
 const $=(id)=>document.getElementById(id);
 const esc=(s)=>s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
@@ -124,7 +150,7 @@ async function loadAll(){
     report=null;reportCount=reps.length;
     if(reps.length){report={name:reps[0].name,text:await ghRaw("01_weekly_reports/"+reps[0].name)};}
     companies=parseScores(scoresMd);designDoc=design;
-    setStatus(`동기화 ${new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})} · 보고서 ${reportCount}건 · 기업 ${companies.length}곳`);
+    setStatus(`동기화 ${new Date().toLocaleTimeString("ko-KR",{hour:"2-digit",minute:"2-digit"})} · 보고서 ${reportCount}건 · 기업 ${companies.length}곳`+(fxRate?` · 1위안 ≈ ${fxRate}원`:""));
     draw();
   }catch(e){
     const code=String(e.message).split(":")[0];
@@ -143,7 +169,7 @@ async function ask(q){
   if(!question||thinking)return;
   input.value="";msgs.push({role:"user",content:question});thinking=true;drawChat();
   const sys=`너는 '중국 로봇 산업 분석 에이전트'다. 한국인 투자자의 질문에 아래 지식 베이스를 근거로 한국어로 답한다.
-규칙: 1) 근거가 없으면 솔직히 없다고 말한다. 2) 점수·등급은 점수표를 그대로 인용한다. 3) 투자 추천은 하지 않고 판단 재료만 정리한다. 4) 간결하게 답한다.
+규칙: 1) 근거가 없으면 솔직히 없다고 말한다. 2) 점수·등급은 점수표를 그대로 인용한다. 3) 투자 추천은 하지 않고 판단 재료만 정리한다. 4) 간결하게 답한다. 5) 위안화 금액을 언급할 때는 괄호로 원화 환산을 병기한다${fxRate?` (1위안 = ${fxRate}원 적용, '약'을 붙여 반올림)`:""}.
 [기업 점수표]
 ${companies.map(c=>`${c.name}(${c.sec}) 총점:${c.total??"미평가"} 등급:${c.grade} 비고:${c.note}`).join("\n")}
 [최신 주간보고서: ${report?report.name:"없음"}]
@@ -204,7 +230,7 @@ function gradeBoard(){
 function goAsk(name){tab="chat";draw();ask(name+"의 현재 평가와 핵심 체크포인트를 요약해줘");}
 function reportView(){
   if(!report)return `<p style="color:var(--sub)">아직 주간보고서가 없습니다. 자동화가 실행되면 표시됩니다.</p>`;
-  return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px"><span class="mono" style="font-size:12.5px;color:var(--sub)">${esc(report.name)} · 매주 월요일 자동 갱신</span><button class="btn" onclick="tab='chat';draw();ask('최신 주간보고서의 핵심만 5줄로 요약해줘')">AI 요약 듣기</button></div>${renderMd(report.text)}`;
+  return `<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px"><span class="mono" style="font-size:12.5px;color:var(--sub)">${esc(report.name)} · 매주 월요일 자동 갱신${fxRate?` · 환산 1위안≈${fxRate}원`:""}</span><button class="btn" onclick="tab='chat';draw();ask('최신 주간보고서의 핵심만 5줄로 요약해줘')">AI 요약 듣기</button></div>${renderMd(annotateYuan(report.text))}`;
 }
 function chatView(){
   return `<div class="chatbox"><div class="msgs" id="msgs"></div>
@@ -219,7 +245,7 @@ function drawChat(){
     h=`<div style="color:var(--sub);font-size:13.5px;line-height:2">점수표·최신 보고서·설계문서를 근거로 답합니다. 예를 들어 —
     ${["지금 S등급 기업은 어디야?","이번 주 보고서 핵심 요약해줘","퉈푸그룹 리스크가 뭐야?","유니트리와 유비텍 점수 차이 설명해줘"].map(q=>`<button class="sug" onclick="ask('${q}')">“${q}”</button>`).join("")}</div>`;
   }
-  for(const m of msgs){h+=`<div class="msg ${m.role==="user"?"user":"ai"}"><div class="bub">${m.role==="assistant"?renderMd(m.content):esc(m.content)}</div></div>`;}
+  for(const m of msgs){h+=`<div class="msg ${m.role==="user"?"user":"ai"}"><div class="bub">${m.role==="assistant"?renderMd(annotateYuan(m.content)):esc(m.content)}</div></div>`;}
   if(thinking)h+=`<div style="color:var(--sub);font-size:13px;margin:8px 0">분석 중…</div>`;
   box.innerHTML=h;box.scrollTop=box.scrollHeight;
 }
@@ -275,7 +301,7 @@ function boot(){
   </div>
   <div class="panel" id="main"></div>
   <footer>리서치 보조 도구입니다 · 투자 추천이 아니며 최종 판단은 본인에게 있습니다</footer>`;
-  draw();loadAll();
+  draw();loadFx().then(()=>loadAll());
 }
 boot();
 </script>
